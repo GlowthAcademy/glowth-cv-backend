@@ -9,7 +9,18 @@ const rateLimit = require('express-rate-limit');
 const pool = require('./config/db');
 const logger = require('./utils/logger'); // Import Winston logger
 
-// Initialize Express
+// ==============================
+// 🛠️ Database Connection Debugging
+// ==============================
+
+pool.connect()
+    .then(() => logger.info('✅ Successfully connected to PostgreSQL database'))
+    .catch(err => logger.error('❌ Database connection error:', err));
+
+// ==============================
+// 🚀 Initialize Express App
+// ==============================
+
 const app = express();
 
 // ==============================
@@ -61,6 +72,7 @@ app.use(cors({
     credentials: true
 }));
 
+// Enable JSON parsing for incoming requests
 app.use(express.json());
 
 // ==============================
