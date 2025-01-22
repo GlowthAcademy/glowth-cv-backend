@@ -15,7 +15,10 @@ const logger = require('./utils/logger'); // Import Winston logger
 
 pool.connect()
     .then(() => logger.info('✅ Successfully connected to PostgreSQL database'))
-    .catch(err => logger.error('❌ Database connection error:', err));
+    .catch(err => {
+        logger.error('❌ Database connection error:', err);
+        process.exit(1);  // Exit if DB connection fails
+    });
 
 // ==============================
 // 🚀 Initialize Express App
@@ -27,39 +30,36 @@ const app = express();
 // 🔒 Apply Security Middleware
 // ==============================
 
-// Helmet for setting secure HTTP headers
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "trusted-scripts.com"],  // Allow scripts from self and trusted source
-            objectSrc: ["'none'"],  // Block object embeds
-            upgradeInsecureRequests: []  // Upgrade HTTP requests to HTTPS
+            scriptSrc: ["'self'", "trusted-scripts.com"],
+            objectSrc: ["'none'"],
+            upgradeInsecureRequests: []
         }
     },
-    frameguard: { action: 'deny' }, // Prevent clickjacking
-    xssFilter: true,                 // Enable XSS protection
-    noSniff: true,                    // Prevent MIME sniffing
-    hsts: { maxAge: 31536000, includeSubDomains: true },  // Force HTTPS
+    frameguard: { action: 'deny' },
+    xssFilter: true,
+    noSniff: true,
+    hsts: { maxAge: 31536000, includeSubDomains: true },
     referrerPolicy: { policy: 'no-referrer' }
 }));
 
-// Morgan for request logging (sends logs to Winston)
 app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));
 
 // ==============================
-// 🛡️ CORS Setup (Cross-Origin Resource Sharing)
+// 🛡️ CORS Setup
 // ==============================
 
 const allowedOrigins = [
-    'http://localhost:3000',  // React app during development
-    'https://your-production-domain.com'  // Production frontend
+    'http://localhost:3000',
+    'https://your-production-domain.com'
 ];
 
 app.use(cors({
     origin: (origin, callback) => {
         logger.info(`Incoming request from origin: ${origin}`);
-
         if (!origin || allowedOrigins.includes(origin)) {
             logger.info(`✅ Allowed request from: ${origin}`);
             callback(null, true);
@@ -76,12 +76,12 @@ app.use(cors({
 app.use(express.json());
 
 // ==============================
-// 🛡️ Rate Limiting (Prevents Brute-Force Attacks)
+// 🛡️ Rate Limiting
 // ==============================
 
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,  // 15 minutes window
-    max: 10,  // Limit each IP to 10 requests per window
+    windowMs: 15 * 60 * 1000,
+    max: 10,
     message: 'Too many requests, please try again later',
     handler: (req, res) => {
         logger.warn(`⚠️ Rate limit exceeded for IP: ${req.ip}`);
@@ -89,7 +89,6 @@ const limiter = rateLimit({
     }
 });
 
-// Apply rate limiting to sensitive routes
 app.use('/api/users/login', limiter);
 app.use('/api/users/register', limiter);
 
@@ -101,7 +100,7 @@ const userRoutes = require('./routes/userRoutes');
 app.use('/api/users', userRoutes);
 
 // ==============================
-// 🚀 Test Route (Basic Health Check)
+// 🚀 Test Route
 // ==============================
 
 app.get('/', (req, res) => {
@@ -119,11 +118,21 @@ app.use((err, req, res, next) => {
 });
 
 // ==============================
-// 🚀 Start Server
+// 🚀 Start Server After DB Connection
 // ==============================
 
 const PORT = process.env.PORT || 5001;
-app.listen(PORT, () => {
-    logger.info(`✅ Server running on port ${PORT}`);
-});
+
+pool.connect()
+    .then(() => {
+        logger.info('✅ Database connected, starting server...');
+        app.listen(PORT, () => {
+            logger.info(`✅ Server running on port ${PORT}`);
+        });
+    })
+    .catch(err => {
+        logger.error('❌ Database connection failed:', err);
+        process.exit(1);
+    });
+
 
